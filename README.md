@@ -128,6 +128,21 @@ entry with no `type` key as stdio, while Copilot CLI requires `"type": "local"`.
 
 ## Troubleshooting
 
+**`setup.R` fails installing `btw` on macOS.** Two separate issues, both real,
+both hit during development of this template:
+
+- `rustc: command not found` while building `yaml12` — no macOS binary exists
+  for it yet, so it builds from source, which needs a Rust compiler. Fix:
+  `brew install rust`, then re-run.
+- `fatal error: 'cstring' file not found` while building `frontmatter` — a
+  stale header directory left behind by a Command Line Tools update shadows
+  the real SDK headers. Fix:
+  ```bash
+  sudo rm -rf /Library/Developer/CommandLineTools/usr/include/c++
+  ```
+  If that doesn't resolve it, reinstall Command Line Tools entirely:
+  `sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install`.
+
 **The agent hangs with no error and no timeout.** Most likely cause, and the
 first thing to try. `mcptools` connects over Unix domain sockets, which some
 endpoint-security software blocks silently
