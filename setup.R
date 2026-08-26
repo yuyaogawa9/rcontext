@@ -35,7 +35,11 @@ missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
 
 if (length(missing)) {
   cat("\ninstalling: ", paste(missing, collapse = ", "), "\n\n", sep = "")
-  install.packages(missing, repos = "https://cloud.r-project.org")
+  # r-universe first: some transitive deps (e.g. yaml12, a Rust-backed YAML
+  # parser used by frontmatter/btw) publish CRAN binaries with a delay, and
+  # source install would otherwise require a Rust toolchain nobody asked for.
+  install.packages(missing, repos = c("https://cran.r-universe.dev",
+                                       "https://cloud.r-project.org"))
   still <- missing[!vapply(missing, requireNamespace, logical(1), quietly = TRUE)]
   if (length(still)) fail("could not install: ", paste(still, collapse = ", "))
 }
