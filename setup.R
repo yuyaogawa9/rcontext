@@ -33,13 +33,21 @@ if (file.exists("~/.Rprofile")) {
 needed  <- c("ellmer", "btw", "mcptools")
 missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
 
+if (length(missing) && "btw" %in% missing && nzchar(Sys.which("rustc")) == FALSE) {
+  # btw pulls in frontmatter -> yaml12, a Rust-backed YAML parser. If CRAN
+  # hasn't published a binary for your R version/OS yet, install.packages()
+  # falls back to building yaml12 from source, which needs a Rust compiler.
+  # Warn up front instead of letting it fail three packages deep.
+  warn("rustc not found on PATH.")
+  warn("If CRAN has no binary for 'yaml12' on your system, this install will")
+  warn("fail asking for a Rust compiler. If it does, run: brew install rust")
+  warn("(macOS) and re-run this script. Trying the install now regardless,")
+  warn("in case a binary is available for you.")
+}
+
 if (length(missing)) {
   cat("\ninstalling: ", paste(missing, collapse = ", "), "\n\n", sep = "")
-  # r-universe first: some transitive deps (e.g. yaml12, a Rust-backed YAML
-  # parser used by frontmatter/btw) publish CRAN binaries with a delay, and
-  # source install would otherwise require a Rust toolchain nobody asked for.
-  install.packages(missing, repos = c("https://cran.r-universe.dev",
-                                       "https://cloud.r-project.org"))
+  install.packages(missing, repos = "https://cloud.r-project.org")
   still <- missing[!vapply(missing, requireNamespace, logical(1), quietly = TRUE)]
   if (length(still)) fail("could not install: ", paste(still, collapse = ", "))
 }
