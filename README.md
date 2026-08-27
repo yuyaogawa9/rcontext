@@ -21,8 +21,8 @@ Agent: [reads your console history, sees the error]
 ## Install
 
 ```r
-# install.packages("pak")
-pak::pak("yuyaogawa9/rcontext")
+# install.packages("remotes")
+remotes::install_github("yuyaogawa9/rcontext")
 
 rcontext::setup()
 ```
