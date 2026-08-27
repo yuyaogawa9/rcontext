@@ -6,10 +6,15 @@
 #' earlier work alongside the user's. Keeping them in one log is what stops the
 #' agent losing track of what it did two turns ago.
 #'
+#' While the hooks are installed this also refreshes the `.rcontext/session.md`
+#' fallback, so every path that records history keeps it current — a live
+#' console command, an error, or an agent `run_r` call.
+#'
 #' @noRd
 log_entry <- function(cmd, output = "") {
   entry <- if (nzchar(output)) paste0("> ", cmd, "\n", output) else paste0("> ", cmd)
   the$history <- utils::tail(c(the$history, entry), opt_history())
+  if (isTRUE(the$hooked)) write_session_snapshot()
   invisible(entry)
 }
 

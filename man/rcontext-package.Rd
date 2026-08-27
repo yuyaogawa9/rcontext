@@ -24,6 +24,6 @@ instead of the full list.
 }
 \seealso{
 \code{\link{setup}}, \code{\link{start}}, \code{\link{mcp_server}},
-\code{\link{rcontext_tools}}
+\code{\link{rcontext_tools}}, \code{\link{export}}
 }
 \author{Yuya Ogawa}

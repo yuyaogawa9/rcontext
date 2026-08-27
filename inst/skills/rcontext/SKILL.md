@@ -86,3 +86,27 @@ likelihood:
 Tell them which of these to check. Do not silently fall back to reading their
 source files and answering as if you had seen the session — say that you could
 not reach it.
+
+## If the rcontext tools are missing entirely
+
+If this skill loaded but there is no `rcontext` MCP server in your tool list at
+all — no `describe_environment`, no `run_r` — the server is most likely blocked
+by endpoint security on this machine. The session falls back to files under
+`.rcontext/`, which you read with your normal file tools:
+
+- **`.rcontext/session.md`** — a snapshot of the loaded environment and recent
+  console history, including errors, rewritten after every command the user
+  runs. This is the substitute for `describe_environment` and
+  `get_console_history`. If it is missing, the user has an older `rcontext` or
+  has not run a command since starting R; ask them to run one, or
+  `rcontext::start()`.
+- **`.rcontext/objects/*.rds`** — objects the user exported with
+  `rcontext::export(name)`. To compute on their real data, start your own
+  `Rscript`, `readRDS()` the file and analyse the copy. You are working on a
+  snapshot, not their session: nothing you do touches their work, and changes
+  they make after the export are not reflected until they export again. If you
+  need an object that is not there, ask them to `rcontext::export()` it — do
+  not guess its contents from `.R` files.
+
+Still say, once, that you could not reach the live session and are working from
+the fallback files.

@@ -1,3 +1,30 @@
+# rcontext 0.1.3
+
+* A file-based fallback for when endpoint security blocks the local socket the
+  broker uses to reach the session. There is then no live channel left, but an
+  agent can still read files in the project.
+
+  * The console hook now also rewrites `.rcontext/session.md` after every
+    top-level command — the environment summary and recent console history,
+    including errors — for an agent whose `rcontext` MCP tools are missing to
+    read directly. `rcontext::start()` installs the hook before it touches the
+    socket, so the snapshot is kept current even when registration fails.
+
+  * `export()` writes one `.rds` per named object into `.rcontext/objects/`, so
+    an agent can `readRDS()` and analyse a copy in its own process without a
+    live session. Object selection is explicit and never automatic; objects
+    over `max_size` (50 MB) are skipped.
+
+  * The shipped skill gains a section telling the agent to read `session.md`
+    and load `objects/*.rds` when the tools are absent, instead of reverting to
+    guessing from `.R` files.
+
+* README: the old "force TCP on both sides" troubleshooting note was wrong —
+  `mcp_server(type = "http")` only changes the agent-to-broker leg, and the
+  broker-to-session leg is always a Unix domain socket. Corrected, and
+  `MCPTOOLS_SOCKET_DIR` (which relocates that socket) is now documented as the
+  first mitigation to try, alongside the file fallback.
+
 # rcontext 0.1.2
 
 * `setup()` now installs an agent skill alongside the MCP server. Registering

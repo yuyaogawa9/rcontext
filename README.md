@@ -129,6 +129,51 @@ One consequence is worth internalising: your session can only answer while it is
 every agent query queues behind it. Let the agent run long jobs (`run_r`) rather
 than running them yourself mid-conversation.
 
+## When the socket is blocked
+
+The broker reaches your session over a **Unix domain socket**, and some
+corporate endpoint-security software blocks that silently
+([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)). The agent then
+hangs with no error. `mcp_server(type = "http")` does **not** help: it only
+changes the agent↔broker leg, and the broker↔session leg is always a UDS.
+
+Two things to try, in order.
+
+**1. Move the socket.** `mcptools` picks the socket path from
+`MCPTOOLS_SOCKET_DIR` if it is set, falling back to a temp directory
+(`/var/folders/…` on macOS, `$XDG_RUNTIME_DIR` or `/tmp/…` on Linux). If the
+blocker watches those paths rather than the socket syscall itself, relocating it
+is a one-line fix — add this to `~/.Rprofile` *above* the `rcontext` block:
+
+```r
+Sys.setenv(MCPTOOLS_SOCKET_DIR = "~/.rcontext-sock")
+```
+
+Use an absolute path to a directory you own, mode `0700`, not a symlink.
+
+**2. Fall back to files.** If the socket cannot be unblocked at all, an agent
+that can still read files is not stuck. Whenever the hooks are installed
+(`rcontext::start()` runs them before it touches the socket, so this works even
+when registration fails), the session keeps two things current under
+`.rcontext/`, which `setup()` already git-ignores:
+
+| Path | Stands in for | Refreshed |
+|---|---|---|
+| `.rcontext/session.md` | `describe_environment` + `get_console_history` | after every top-level command |
+| `.rcontext/objects/<name>.rds` | `run_r` on real data | when you call `rcontext::export(<name>)` |
+
+`session.md` is written automatically. Object export is deliberately manual and
+per-object — it puts a copy of your data on disk:
+
+```r
+rcontext::export(model, penguins)   # -> .rcontext/objects/{model,penguins}.rds
+```
+
+The agent loads those in its own `Rscript` and analyses the copy, never
+touching your session. The shipped skill tells it to read `session.md` and load
+`objects/*.rds` when the MCP tools are absent, rather than reverting to
+guessing from your `.R` files.
+
 ## Security — read this
 
 `run_r` gives a language model the ability to execute arbitrary R code inside
@@ -159,6 +204,8 @@ The socket is local and same-user only; nothing is exposed to the network.
 | `rcontext.max_chars` | 8000 | Character cap on a single tool response |
 | `rcontext.history` | 100 | Console entries retained |
 | `rcontext.plot_dir` | `.rcontext/plots` | Where `get_last_plot` writes |
+| `rcontext.session_file` | `.rcontext/session.md` | Where the console hook mirrors session state |
+| `rcontext.object_dir` | `.rcontext/objects` | Where `export()` writes `.rds` files |
 
 The two caps stop a large `print()` burying the agent's context window.
 Responses that hit a cap say so, so the agent narrows its query instead of
@@ -183,10 +230,12 @@ skill list`, or that `~/.claude/skills/rcontext/SKILL.md` exists.
 library path with Copilot, and an R minor-version upgrade relocates the
 library. Re-run `rcontext::setup()`.
 
-**The agent hangs with no error and no timeout.** `mcptools` connects over Unix
-domain sockets, which some endpoint-security software blocks silently
-([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)). Forcing TCP on
-both sides is the known workaround.
+**The agent hangs with no error and no timeout.** Endpoint-security software is
+blocking the broker↔session Unix domain socket. See
+[When the socket is blocked](#when-the-socket-is-blocked): set
+`MCPTOOLS_SOCKET_DIR` to move the socket, or use the `.rcontext/` file fallback.
+Forcing the transport to HTTP does not help — only the broker↔session leg
+matters and it is always a UDS.
 
 **It answers about the wrong session.** Several R sessions are registered. Ask
 the agent to run `list_r_sessions`, then `select_r_session`.
