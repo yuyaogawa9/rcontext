@@ -68,15 +68,28 @@ found_agents <- function(agents) {
   agents[nzchar(Sys.which(agents))]
 }
 
+# system2() does not quote its arguments, and the server command contains
+# parentheses, which the shell treats as syntax. Both the executed command and
+# the one we print for the user to copy have to survive shell parsing.
 run_agent <- function(cli, action) {
   args <- agent_args(cli, action)
   if (is.null(args)) return(FALSE)
   out <- suppressWarnings(
-    tryCatch(system2(cli, args, stdout = TRUE, stderr = TRUE),
+    tryCatch(system2(cli, shQuote(args), stdout = TRUE, stderr = TRUE),
              error = function(e) structure("", status = 1L))
   )
   status <- attr(out, "status")
   is.null(status) || identical(status, 0L)
+}
+
+#' A copy-pasteable command line, quoting only the arguments that need it
+#' @noRd
+agent_command_line <- function(cli, action) {
+  args <- agent_args(cli, action)
+  if (is.null(args)) return(NA_character_)
+  needs_quote <- grepl("[^A-Za-z0-9_./:=-]", args)
+  args[needs_quote] <- paste0('"', args[needs_quote], '"')
+  paste(cli, paste(args, collapse = " "))
 }
 
 # Public -----------------------------------------------------------------------
@@ -154,7 +167,7 @@ setup <- function(agents = c("claude", "copilot"),
   for (a in registered) message("  registered with ", a)
   for (a in failed) {
     message("  could not register with ", a, " -- run this yourself:")
-    message("    ", a, " ", paste(agent_args(a, "add"), collapse = " "))
+    message("    ", agent_command_line(a, "add"))
   }
 
   message("\nNext: restart R (Session > Restart R), then start an agent in a ",
@@ -189,7 +202,7 @@ teardown <- function(agents = c("claude", "copilot"),
   failed <- setdiff(present, unregistered)
   for (a in failed) {
     message("  could not unregister from ", a, " -- run this yourself:")
-    message("    ", a, " ", paste(agent_args(a, "remove"), collapse = " "))
+    message("    ", agent_command_line(a, "remove"))
   }
 
   invisible(list(rprofile = removed, agents = unregistered))

@@ -1,3 +1,12 @@
+# rcontext 0.1.1
+
+* `setup()` and `teardown()` failed to register with either agent CLI.
+  `system2()` does not quote its arguments, so the shell read the parentheses
+  in `rcontext::mcp_server()` as syntax and errored. Arguments are now passed
+  through `shQuote()`.
+* The fallback command printed when registration fails carried the same
+  defect, so copying it also failed. It is now shell-safe.
+
 # rcontext 0.1.0
 
 First release. Converted from the `r-agent-context` project template into an
