@@ -1,0 +1,29 @@
+Package: rcontext
+Title: Make Your Live R Session Visible to Terminal Coding Agents
+Version: 0.1.0
+Authors@R:
+    person("Yuya", "Ogawa", , "yuya19991230@gmail.com", role = c("aut", "cre"))
+Description: Terminal coding agents such as Claude Code and GitHub Copilot
+    CLI run in a separate process from R, so they cannot see the objects you
+    have loaded, the commands you have run, or the errors those commands
+    threw. This package exposes that session state to them over the Model
+    Context Protocol, so they can read your environment and console instead
+    of guessing from source files. A single setup() call registers the
+    server with every agent it finds and arranges for future R sessions to
+    announce themselves automatically.
+License: MIT + file LICENSE
+URL: https://github.com/yuyaogawa9/rcontext
+BugReports: https://github.com/yuyaogawa9/rcontext/issues
+Depends:
+    R (>= 4.1.0)
+Imports:
+    ellmer (>= 0.3.0),
+    grDevices,
+    mcptools,
+    utils
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2

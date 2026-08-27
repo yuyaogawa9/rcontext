@@ -1,4 +1,4 @@
-# r-agent-context
+# rcontext
 
 Code in R with a terminal agent that can actually see your session.
 
@@ -7,8 +7,8 @@ default they are blind to the thing that matters most: the data frame you have
 loaded, the column names it really has, and the error your last command threw.
 They read your `.R` files and guess at the rest.
 
-This template wires them into your live RStudio session, so instead of guessing
-they can look.
+`rcontext` wires them into your live R session, so instead of guessing they can
+look.
 
 ```
 You:   my script just errored - what happened?
@@ -18,57 +18,76 @@ Agent: [reads your console history, sees the error]
        aggregate(bill_len ~ species, data = penguins, FUN = mean)
 ```
 
-## Quickstart
-
-```bash
-git clone https://github.com/yuyaogawa9/r-agent-context.git
-cd r-agent-context
-```
-
-1. Open `r-agent-context.Rproj` in RStudio.
-2. In the R console: `source("setup.R")` — installs `mcptools`, `btw`, `ellmer`
-   and runs a preflight check.
-3. **Session → Restart R.** The `.Rprofile` registers your session on startup,
-   so this step is required, not optional.
-4. Open the RStudio **Terminal** tab and start an agent from the project root:
-   - `claude` — reads `.mcp.json`
-   - `copilot` — reads `.github/mcp.json`
-5. Ask it: *"what data frames do I have loaded?"*
-
-Requires R >= 4.2.0.
-
-## Try the demo
-
-`example/analysis.R` is broken on purpose. In the R console:
+## Install
 
 ```r
+# install.packages("pak")
+pak::pak("yuyaogawa9/rcontext")
+
+rcontext::setup()
+```
+
+`setup()` shows you exactly what it will change and asks before changing
+anything. Then restart R (**Session → Restart R** in RStudio) and you are done —
+in this project and every other one, now and later.
+
+Requires R >= 4.1.0. No compiler needed.
+
+## What setup() does
+
+Two things a package alone cannot do, because installing a package never runs
+code at R startup:
+
+1. Appends a guarded block to your `~/.Rprofile`, between markers, so every
+   interactive R session registers itself:
+
+   ```r
+   # >>> rcontext >>>
+   if (interactive() &&
+       !nzchar(Sys.getenv("RCONTEXT_DISABLE")) &&
+       requireNamespace("rcontext", quietly = TRUE)) {
+     rcontext::start()
+   }
+   # <<< rcontext <<<
+   ```
+
+2. Registers the MCP server with each agent CLI it finds on your `PATH`, by
+   calling that CLI's own command — it never edits their config files:
+
+   ```bash
+   claude  mcp add -s user rcontext -- Rscript -e "rcontext::mcp_server()"
+   copilot mcp add         rcontext -- Rscript -e "rcontext::mcp_server()"
+   ```
+
+`rcontext::teardown()` reverses both. Lines you wrote in `~/.Rprofile` yourself
+are left exactly as they were.
+
+To skip registration for one session: `RCONTEXT_DISABLE=1 R`.
+
+## Try it
+
+```r
+file.copy(system.file("example", package = "rcontext"), ".", recursive = TRUE)
 source("example/analysis.R")
 #> Error in eval(predvars, data, env) : object 'bill_length_mm' not found
 ```
 
-Now ask your agent in the terminal: *"my script just errored — what happened
-and how do I fix it?"*
+Now ask your agent in the terminal: *"my script just errored — what happened and
+how do I fix it?"*
 
-The fix requires knowing a column name that appears nowhere in the script.
-An agent without session context cannot get there; this one reads the error
-out of your console history and the real name off the loaded data frame.
+The fix requires a column name that appears nowhere in the script. An agent
+without session context cannot get there; this one reads the error out of your
+console history and the real name off the loaded data frame.
 
 ## What the agent can see
 
 | Tool | What it answers |
 |---|---|
+| `describe_environment` | Every object loaded now: class, dimensions, size, columns |
+| `describe_data_frame` | One table in full: column types, missing counts, first rows |
 | `get_console_history` | Recent commands and their output, **including errors** |
 | `run_r` | Runs code in your session, returns output/warnings/errors |
 | `get_last_plot` | Saves the current plot to PNG and returns the path |
-| `btw_tool_env_describe_environment` | What objects are loaded right now |
-| `btw_tool_env_describe_data_frame` | Columns, types, dimensions, sample rows |
-| `btw_tool_sessioninfo_*` | R version, platform, installed packages |
-| `btw_tool_docs_*` | Help pages and vignettes for installed packages |
-| `list_r_sessions` / `select_r_session` | Which session to target when several are open |
-
-The first three are defined in `R/agent_tools.R`; the rest come from
-[btw](https://posit-dev.github.io/btw/) and
-[mcptools](https://posit-dev.github.io/mcptools/).
 
 ## How it works
 
@@ -80,20 +99,20 @@ is an empty session, not yours. So a broker sits in between:
   Claude Code / Copilot CLI
       |  stdio  (the agent spawns and owns this process)
       v
-  Rscript -e mcptools::mcp_server(...)        <- holds no data
+  Rscript -e rcontext::mcp_server()        <- holds no data
       |  local socket
       v
-  your RStudio session                        <- holds your data
-      registered by .Rprofile on startup
+  your R session                           <- holds your data
+      registered by the .Rprofile hook
 ```
 
 Tools are declared in the broker but **executed in your session**. That is what
 lets `get_console_history` read a log that lives in your session's memory.
 
-One consequence is worth internalising: your session can only answer while it
-is **idle at the console prompt**. If you start a ten-minute model fit by hand,
-every agent query queues behind it. Let the agent run long jobs (`run_r`)
-rather than running them yourself mid-conversation.
+One consequence is worth internalising: your session can only answer while it is
+**idle at the console prompt**. If you start a ten-minute model fit by hand,
+every agent query queues behind it. Let the agent run long jobs (`run_r`) rather
+than running them yourself mid-conversation.
 
 ## Security — read this
 
@@ -108,88 +127,55 @@ writing to the global environment.
 **That scratch environment is a guard against accidents, not a security
 boundary.** `<<-`, `assign(envir = globalenv())`, `file.remove()`, `system()`
 and any file I/O escape it trivially. If you are not comfortable granting that,
-delete the `run_r` entry from `agent_tools()` in `R/agent_tools.R` — the
-inspection tools work without it.
+serve a subset instead:
+
+```r
+# everything except run_r
+mcptools::mcp_server(tools = rcontext_tools()[-4])
+```
 
 The socket is local and same-user only; nothing is exposed to the network.
 
-## Using this in your own project
+## Options
 
-Only two files matter. Copy them into any existing R project:
+| Option | Default | Effect |
+|---|---|---|
+| `rcontext.max_lines` | 200 | Line cap on a single tool response |
+| `rcontext.max_chars` | 8000 | Character cap on a single tool response |
+| `rcontext.history` | 100 | Console entries retained |
+| `rcontext.plot_dir` | `.rcontext/plots` | Where `get_last_plot` writes |
 
-- `R/agent_tools.R` — the tools
-- `.Rprofile` — registers the session and loads them
-
-then copy `.mcp.json` (Claude Code) and/or `.github/mcp.json` (Copilot CLI) and
-run `setup.R` once. Cloning this repo is the demo; the two files are the thing.
-
-Two configs rather than one because the schemas collide: Claude Code reads an
-entry with no `type` key as stdio, while Copilot CLI requires `"type": "local"`.
+The two caps stop a large `print()` burying the agent's context window.
+Responses that hit a cap say so, so the agent narrows its query instead of
+assuming it saw everything.
 
 ## Troubleshooting
 
-**`setup.R` fails installing `btw` on macOS.** Two separate issues, both real,
-both hit during development of this template:
+**"No R sessions found."** You did not restart R after `setup()`, or R was
+started somewhere the `~/.Rprofile` hook does not run. Check with
+`rcontext::start()` — if it registers, the hook is the problem.
 
-- `rustc: command not found` while building `yaml12` — no macOS binary exists
-  for it yet, so it builds from source, which needs a Rust compiler. Fix:
-  `brew install rust`, then re-run.
-- `fatal error: 'cstring' file not found` while building `frontmatter` — a
-  stale header directory left behind by a Command Line Tools update shadows
-  the real SDK headers. Fix:
-  ```bash
-  sudo rm -rf /Library/Developer/CommandLineTools/usr/include/c++
-  ```
-  If that doesn't resolve it, reinstall Command Line Tools entirely:
-  `sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install`.
+**A project `.Rprofile` shadows the global one.** R runs *one* `.Rprofile`: a
+project-level file replaces `~/.Rprofile` entirely. In such projects add
+`if (file.exists("~/.Rprofile")) source("~/.Rprofile")` to the project file.
 
-**The agent hangs with no error and no timeout.** Most likely cause, and the
-first thing to try. `mcptools` connects over Unix domain sockets, which some
-endpoint-security software blocks silently
-([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)). Force TCP on
-both sides — in `.Rprofile` before `mcp_session()`, and in the `-e` string in
-your MCP config:
+**The agent hangs with no error and no timeout.** `mcptools` connects over Unix
+domain sockets, which some endpoint-security software blocks silently
+([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)). Forcing TCP on
+both sides is the known workaround.
 
-```r
-the_env$socket_url <- "tcp://127.0.0.1:4777"
-```
-
-**"No R sessions found."** You did not restart R after `setup.R` (step 3), or
-you started the agent from a different directory than the project root.
-
-**It answers about the wrong session.** Several RStudio projects are open and
-each registered. Ask the agent to run `list_r_sessions`, then `select_r_session`.
-
-**My personal `.Rprofile` stopped applying.** A project `.Rprofile` replaces it
-entirely. Add `if (file.exists("~/.Rprofile")) source("~/.Rprofile")` as the
-first line of this project's `.Rprofile`.
-
-**`could not find function "agent_tools"`.** The broker is resolving
-`R/agent_tools.R` relative to its working directory. Start the agent from the
-project root, or make the path in the MCP config absolute.
+**It answers about the wrong session.** Several R sessions are registered. Ask
+the agent to run `list_r_sessions`, then `select_r_session`.
 
 **Plots.** `get_last_plot` writes a PNG and returns its path. Claude Code can
 open images; whether Copilot CLI can is untested — if it cannot, the path is
 still useful to you.
 
-## Status
-
-`R/agent_tools.R` has a test suite covering output truncation, console history,
-the sandbox boundary, and error/warning capture:
-
-```bash
-Rscript tests/test_agent_tools.R
-```
-
-These run without an agent, an MCP server, or RStudio. The bridge itself
-depends on `mcptools` behaviour upstream and is exercised by the demo above
-rather than by automated tests.
-
 ## Credits
 
 Built on [mcptools](https://github.com/posit-dev/mcptools) and
-[btw](https://github.com/posit-dev/btw) by Posit. If you want a richer,
-RStudio-specific alternative with async execution and viewer capture, look at
-[ClaudeR](https://github.com/IMNMV/ClaudeR).
+[ellmer](https://ellmer.tidyverse.org) by Posit. [btw](https://github.com/posit-dev/btw)
+covers overlapping ground with a much larger tool set; `rcontext` deliberately
+stays small and dependency-light so that it installs without a compiler.
 
 MIT licensed.

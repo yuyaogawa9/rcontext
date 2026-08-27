@@ -1,0 +1,37 @@
+#' @keywords internal
+"_PACKAGE"
+
+# Internal, per-session state. Created at load time; never serialized between
+# sessions. The scratch environment is built lazily because its parent must be
+# the global environment of the *running* session, not of the build.
+the <- new.env(parent = emptyenv())
+the$history <- character(0)
+the$scratch <- NULL
+the$hooked <- FALSE
+
+#' Options
+#'
+#' @description
+#' `rcontext` reads these options, all of which have defaults:
+#'
+#' * `rcontext.max_lines` (200) — maximum lines in a single tool response.
+#' * `rcontext.max_chars` (8000) — maximum characters in a single tool response.
+#' * `rcontext.history` (100) — console entries retained.
+#' * `rcontext.plot_dir` (".rcontext/plots") — where [get_last_plot] writes PNGs.
+#'
+#' The two caps exist so that printing a large object cannot bury the agent's
+#' context window; responses that hit a cap say so explicitly, so the agent
+#' narrows its query rather than assuming it saw everything.
+#'
+#' @name rcontext-options
+NULL
+
+opt_max_lines <- function() getOption("rcontext.max_lines", 200L)
+opt_max_chars <- function() getOption("rcontext.max_chars", 8000L)
+opt_history   <- function() getOption("rcontext.history", 100L)
+opt_plot_dir  <- function() getOption("rcontext.plot_dir", ".rcontext/plots")
+
+scratch_env <- function() {
+  if (is.null(the$scratch)) the$scratch <- new.env(parent = globalenv())
+  the$scratch
+}
