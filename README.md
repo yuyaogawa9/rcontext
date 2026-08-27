@@ -35,7 +35,7 @@ Requires R >= 4.1.0. No compiler needed.
 
 ## What setup() does
 
-Two things a package alone cannot do, because installing a package never runs
+Three things a package alone cannot do, because installing a package never runs
 code at R startup:
 
 1. Appends a guarded block to your `~/.Rprofile`, between markers, so every
@@ -59,8 +59,23 @@ code at R startup:
    copilot mcp add         rcontext -- Rscript -e "rcontext::mcp_server()"
    ```
 
-`rcontext::teardown()` reverses both. Lines you wrote in `~/.Rprofile` yourself
-are left exactly as they were.
+3. Installs a skill, so the agent knows *when* to use those tools. Registering
+   the server alone puts five tools in front of an agent with no surrounding
+   context — it will still answer from your source files, or stall on "No R
+   sessions found" without knowing you simply have not restarted R yet.
+
+   Only one of the two CLIs has a command for this, so they differ. Copilot
+   registers the packaged directory, which means upgrading `rcontext` updates
+   the skill in place; Claude Code has no equivalent, so the file is copied and
+   refreshed on every `setup()`:
+
+   ```bash
+   copilot skill add /path/to/library/rcontext/skills
+   # claude: copied to ~/.claude/skills/rcontext/SKILL.md
+   ```
+
+`rcontext::teardown()` reverses all three. Lines you wrote in `~/.Rprofile`
+yourself are left exactly as they were.
 
 To skip registration for one session: `RCONTEXT_DISABLE=1 R`.
 
@@ -158,6 +173,15 @@ started somewhere the `~/.Rprofile` hook does not run. Check with
 **A project `.Rprofile` shadows the global one.** R runs *one* `.Rprofile`: a
 project-level file replaces `~/.Rprofile` entirely. In such projects add
 `if (file.exists("~/.Rprofile")) source("~/.Rprofile")` to the project file.
+
+**The agent ignores your session and answers from source files.** It has not
+loaded the skill. Agents read skills and MCP servers at startup, so quit any
+agent that was already running when you ran `setup()`. Check with `copilot
+skill list`, or that `~/.claude/skills/rcontext/SKILL.md` exists.
+
+**The skill stops working after an R upgrade.** `setup()` registers an absolute
+library path with Copilot, and an R minor-version upgrade relocates the
+library. Re-run `rcontext::setup()`.
 
 **The agent hangs with no error and no timeout.** `mcptools` connects over Unix
 domain sockets, which some endpoint-security software blocks silently

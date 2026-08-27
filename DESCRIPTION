@@ -1,6 +1,6 @@
 Package: rcontext
 Title: Make Your Live R Session Visible to Terminal Coding Agents
-Version: 0.1.1
+Version: 0.1.2
 Authors@R:
     person("Yuya", "Ogawa", , "yuya19991230@gmail.com", role = c("aut", "cre"))
 Description: Terminal coding agents such as Claude Code and GitHub Copilot

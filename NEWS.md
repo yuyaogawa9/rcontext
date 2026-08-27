@@ -1,3 +1,22 @@
+# rcontext 0.1.2
+
+* `setup()` now installs an agent skill alongside the MCP server. Registering
+  the server put five tools in front of the agent with no surrounding context,
+  which is not the same as the agent knowing when to reach for them: agents
+  answered from source files, or stalled on "No R sessions found" without
+  knowing the user had simply not restarted R. The skill covers tool selection,
+  picking between several registered sessions, `run_r`'s scratch-environment
+  semantics, the idle-session constraint, and that troubleshooting path.
+
+* The two CLIs take the skill differently, because only one has a command for
+  it. `copilot skill add` registers the packaged directory, so upgrading
+  `rcontext` updates the skill in place. Claude Code has no equivalent command,
+  so the file is copied into `~/.claude/skills/` and refreshed on every
+  `setup()`.
+
+* `teardown()` removes the skill. `setup()` and `teardown()` gain a
+  `claude_dir` argument, exposed for testing exactly as `rprofile` is.
+
 # rcontext 0.1.1
 
 * `setup()` and `teardown()` failed to register with either agent CLI.
