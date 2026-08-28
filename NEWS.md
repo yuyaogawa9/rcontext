@@ -1,3 +1,34 @@
+# rcontext 0.1.4
+
+* `bridge()` / `tick()` — an opt-in, file-driven way for a coding agent to run
+  R in your live session when *no* customized MCP server is allowed (some
+  organisations disable them wholesale), so `run_r` is gone entirely.
+
+  * The agent writes R to `.rcontext/command.R`. A second `addTaskCallback`
+    evaluates it in your global environment the next time you run a console
+    command — or when you call `tick()` — and writes the output to
+    `.rcontext/result.txt`. No polling loop, no new dependency; it reuses
+    `run_code(commit = TRUE)` for the evaluation and capture.
+
+  * By default it asks y/n, showing the code, before each run. Decline and the
+    command is moved to `command.R.declined` and the refusal recorded in
+    `result.txt` so the agent does not wait on it. `bridge(confirm = FALSE)`
+    for a session where you would rather it just run.
+
+  * An RStudio addin, "Run queued agent command", calls `tick()` — bind it to a
+    keyboard shortcut for a one-key trigger that still only fires on your
+    action.
+
+  * Supervised by construction, more than `run_r` is: it advances only on your
+    action, the queued file is visible until it runs so deleting it cancels the
+    command, evaluation is in `globalenv()` where effects are visible and
+    reversible, and the code and its output are echoed to your console. Off
+    unless you call `bridge()`; put it in `~/.Rprofile` to make it persistent.
+
+* `.rcontext/` now keeps itself out of git: the first write drops a `*`
+  `.gitignore` into it. Earlier docs claimed `setup()` did this — it never did;
+  the entry only ever existed in this package's own repo. Wording corrected.
+
 # rcontext 0.1.3
 
 * A file-based fallback for when endpoint security blocks the local socket the

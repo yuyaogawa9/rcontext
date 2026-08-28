@@ -12,6 +12,10 @@
 hook mirrors the session state for agents that cannot reach the MCP server.
 \item \code{rcontext.object_dir} (".rcontext/objects") --- where \code{export} writes
 \code{.rds} files.
+\item \code{rcontext.bridge_cmd} (".rcontext/command.R") --- file \code{bridge} reads
+code from.
+\item \code{rcontext.bridge_result} (".rcontext/result.txt") --- file \code{bridge}
+writes output to.
 }
 
 The two caps exist so that printing a large object cannot bury the agent's

@@ -3,9 +3,31 @@
 # The broker reaches the session over a local socket. Some corporate endpoint
 # security blocks that socket, and then no live channel is left at all. What
 # still works is a file in the project: an agent that cannot read files is
-# useless, so those are never blocked. These two functions write into
-# `.rcontext/` -- already git-ignored by setup() -- so a blocked agent can read
-# the session state and load its objects instead of guessing from `.R` files.
+# useless, so those are never blocked. These functions write into `.rcontext/`
+# -- kept out of the user's commits by a `.gitignore` they drop there
+# themselves (see `ensure_rcontext_dir`) -- so a blocked agent can read the
+# session state and load its objects instead of guessing from `.R` files.
+
+#' Create a `.rcontext/` output directory and keep it out of git
+#'
+#' Drops a `*` `.gitignore` into the `.rcontext/` root the first time anything
+#' writes there, so the whole directory stays uncommitted without the user
+#' editing their own `.gitignore`. A no-op once the file exists, and silent if
+#' the path is customised to somewhere outside a `.rcontext/` folder.
+#'
+#' @param dir Directory to ensure.
+#' @noRd
+ensure_rcontext_dir <- function(dir) {
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  parts <- strsplit(normalizePath(dir, winslash = "/", mustWork = FALSE),
+                    "/", fixed = TRUE)[[1]]
+  hit <- match(".rcontext", parts)
+  if (!is.na(hit)) {
+    gi <- file.path(paste(parts[seq_len(hit)], collapse = "/"), ".gitignore")
+    if (!file.exists(gi)) tryCatch(writeLines("*", gi), error = function(e) NULL)
+  }
+  invisible(dir)
+}
 
 #' Mirror the session state into `.rcontext/session.md`
 #'
@@ -22,7 +44,7 @@
 #' @noRd
 write_session_snapshot <- function(path = opt_session_file()) {
   tryCatch(suppressWarnings({
-    dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+    ensure_rcontext_dir(dirname(path))
     writeLines(c(
       "# R session snapshot",
       "",
@@ -55,7 +77,8 @@ write_session_snapshot <- function(path = opt_session_file()) {
 #' disk in a corporate setting is a data-governance decision, so this writes
 #' only the objects you name, and skips any larger than `max_size`.
 #'
-#' The files land under `.rcontext/`, which [setup()] leaves git-ignored.
+#' The files land under `.rcontext/`, which is kept out of git by a `.gitignore`
+#' written there on first use.
 #'
 #' @param ... Objects to export, named or quoted: `export(model, penguins)` or
 #'   `export("model", "penguins")`.
@@ -78,7 +101,7 @@ export <- function(..., max_size = 50 * 1024^2, dir = opt_object_dir()) {
     return(invisible(character(0)))
   }
 
-  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  ensure_rcontext_dir(dir)
   written <- character(0)
 
   for (nm in names) {

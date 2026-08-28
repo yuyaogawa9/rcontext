@@ -129,17 +129,20 @@ One consequence is worth internalising: your session can only answer while it is
 every agent query queues behind it. Let the agent run long jobs (`run_r`) rather
 than running them yourself mid-conversation.
 
-## When the socket is blocked
+## When the MCP server is unreachable
 
-The broker reaches your session over a **Unix domain socket**, and some
-corporate endpoint-security software blocks that silently
-([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)). The agent then
-hangs with no error. `mcp_server(type = "http")` does **not** help: it only
-changes the agent↔broker leg, and the broker↔session leg is always a UDS.
+Two ways this happens. Endpoint-security software blocks the **Unix domain
+socket** the broker uses to reach your session
+([mcptools#98](https://github.com/posit-dev/mcptools/issues/98)) — the agent
+hangs with no error. Or the organisation disables *customized* MCP servers
+outright, and `rcontext` never appears in the agent's tool list at all. Either
+way the fix is the same file-based fallback; the socket case has one extra
+thing to try first.
 
-Two things to try, in order.
+`mcp_server(type = "http")` does **not** help the socket case: it only changes
+the agent↔broker leg, and the broker↔session leg is always a UDS.
 
-**1. Move the socket.** `mcptools` picks the socket path from
+**Socket case only — move the socket.** `mcptools` picks the socket path from
 `MCPTOOLS_SOCKET_DIR` if it is set, falling back to a temp directory
 (`/var/folders/…` on macOS, `$XDG_RUNTIME_DIR` or `/tmp/…` on Linux). If the
 blocker watches those paths rather than the socket syscall itself, relocating it
@@ -151,11 +154,13 @@ Sys.setenv(MCPTOOLS_SOCKET_DIR = "~/.rcontext-sock")
 
 Use an absolute path to a directory you own, mode `0700`, not a symlink.
 
-**2. Fall back to files.** If the socket cannot be unblocked at all, an agent
-that can still read files is not stuck. Whenever the hooks are installed
-(`rcontext::start()` runs them before it touches the socket, so this works even
-when registration fails), the session keeps two things current under
-`.rcontext/`, which `setup()` already git-ignores:
+### Fall back to files
+
+An agent that can still read files and run `Rscript` is not stuck. Whenever the
+hooks are installed (`rcontext::start()` runs them before it touches the socket,
+so this works even when registration fails), the session keeps these current
+under `.rcontext/` — kept out of your commits by a `.gitignore` written there on
+first use:
 
 | Path | Stands in for | Refreshed |
 |---|---|---|
@@ -173,6 +178,44 @@ The agent loads those in its own `Rscript` and analyses the copy, never
 touching your session. The shipped skill tells it to read `session.md` and load
 `objects/*.rds` when the MCP tools are absent, rather than reverting to
 guessing from your `.R` files.
+
+### Letting the agent run code without MCP
+
+`rcontext::bridge()` gives the agent a way to run R in your live session
+through a file, for when `run_r` is gone:
+
+```r
+rcontext::bridge()          # once per session, or put it in ~/.Rprofile
+```
+
+The agent writes R to `.rcontext/command.R`. The next time you run a console
+command — or call `rcontext::tick()` — you are shown the code and asked y/n;
+on **y** it is evaluated **in your global environment**, its output is written
+to `.rcontext/result.txt` for the agent, and both the code and the output are
+echoed to your console. On **n** the command is moved to
+`.rcontext/command.R.declined` and the refusal is recorded in `result.txt`, so
+the agent knows and does not wait. `rcontext::bridge(confirm = FALSE)` skips the
+prompt for a session where you would rather it just run.
+
+For a faster trigger than typing `rcontext::tick()`, bind the **"Run queued
+agent command"** RStudio addin (Tools → Modify Keyboard Shortcuts) to a key —
+it calls `tick()`, so it still only fires when you press it.
+
+It is a supervised channel, and more so than `run_r`:
+
+- it advances only on your action (a console command, `tick()`, or the addin
+  key) — the agent cannot fire code whenever it likes;
+- by default you approve each command, code shown, before it runs;
+- evaluation is in `globalenv()`, so you see every effect and can undo it;
+- the queued `.rcontext/command.R` is visible until it runs — **delete it to
+  cancel**;
+- it is off unless you call `bridge()`. `rcontext::bridge(FALSE)` turns it off.
+
+**It is still arbitrary code execution in a session holding your real work.**
+The same caution as `run_r` applies — `rm()`, `file.remove()`, `system()` and
+overwriting a loaded object all run for real. If that trade is not one you want
+to make, do not enable the bridge; the read-only `session.md` and `export()`
+fallback above stands on its own.
 
 ## Security — read this
 
@@ -196,6 +239,12 @@ mcptools::mcp_server(tools = rcontext_tools()[-4])
 
 The socket is local and same-user only; nothing is exposed to the network.
 
+The opt-in `rcontext::bridge()` (see [above](#letting-the-agent-run-code-without-mcp))
+grants the same execution power through a file instead of the socket, for sites
+where the socket is unavailable. It is off unless you enable it, and evaluates
+in the global environment where you can see and undo what it does — but the
+caution here applies to it in full.
+
 ## Options
 
 | Option | Default | Effect |
@@ -206,6 +255,8 @@ The socket is local and same-user only; nothing is exposed to the network.
 | `rcontext.plot_dir` | `.rcontext/plots` | Where `get_last_plot` writes |
 | `rcontext.session_file` | `.rcontext/session.md` | Where the console hook mirrors session state |
 | `rcontext.object_dir` | `.rcontext/objects` | Where `export()` writes `.rds` files |
+| `rcontext.bridge_cmd` | `.rcontext/command.R` | File `bridge()` reads code from |
+| `rcontext.bridge_result` | `.rcontext/result.txt` | File `bridge()` writes output to |
 
 The two caps stop a large `print()` burying the agent's context window.
 Responses that hit a cap say so, so the agent narrows its query instead of
@@ -232,7 +283,7 @@ library. Re-run `rcontext::setup()`.
 
 **The agent hangs with no error and no timeout.** Endpoint-security software is
 blocking the broker↔session Unix domain socket. See
-[When the socket is blocked](#when-the-socket-is-blocked): set
+[When the MCP server is unreachable](#when-the-mcp-server-is-unreachable): set
 `MCPTOOLS_SOCKET_DIR` to move the socket, or use the `.rcontext/` file fallback.
 Forcing the transport to HTTP does not help — only the broker↔session leg
 matters and it is always a UDS.

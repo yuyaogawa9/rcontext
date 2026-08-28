@@ -29,7 +29,8 @@ Object selection is explicit and never automatic. Serialising a dataset to
 disk in a corporate setting is a data-governance decision, so this writes
 only the objects you name, and skips any larger than \code{max_size}.
 
-The files land under \verb{.rcontext/}, which \code{\link[=setup]{setup()}} leaves git-ignored.
+The files land under \verb{.rcontext/}, which is kept out of git by a \code{.gitignore}
+written there on first use.
 }
 \examples{
 \dontrun{

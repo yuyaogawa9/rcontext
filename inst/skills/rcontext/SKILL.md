@@ -90,9 +90,10 @@ not reach it.
 ## If the rcontext tools are missing entirely
 
 If this skill loaded but there is no `rcontext` MCP server in your tool list at
-all — no `describe_environment`, no `run_r` — the server is most likely blocked
-by endpoint security on this machine. The session falls back to files under
-`.rcontext/`, which you read with your normal file tools:
+all — no `describe_environment`, no `run_r` — the server is unreachable: either
+endpoint security is blocking its socket, or this site disables customized MCP
+servers outright. The session falls back to files under `.rcontext/`, which you
+read with your normal file tools:
 
 - **`.rcontext/session.md`** — a snapshot of the loaded environment and recent
   console history, including errors, rewritten after every command the user
@@ -110,3 +111,30 @@ by endpoint security on this machine. The session falls back to files under
 
 Still say, once, that you could not reach the live session and are working from
 the fallback files.
+
+### Running code through the bridge
+
+If the user has run `rcontext::bridge()`, you can run R in their live session
+through a file:
+
+1. Write the code to `.rcontext/command.R.tmp`, then rename it to
+   `.rcontext/command.R` (write-then-rename so the session never reads a
+   half-written file). One command per file.
+2. It runs in their **global environment**, and only when they next run a
+   console command, call `rcontext::tick()`, or press their bound addin key.
+   After you queue a command, tell the user to do one of those.
+3. By default the user is shown the code and asked y/n first. Then:
+   - **ran** — `.rcontext/command.R.done` appears and `.rcontext/result.txt`
+     holds the output. Read it.
+   - **declined** — `.rcontext/command.R.declined` appears and `result.txt`
+     starts with `# rcontext bridge -- declined by user`. Do not silently
+     re-queue the same thing: ask the user what to change, or why.
+   - **neither appears** after the user acts — the bridge is off. Ask them to
+     run `rcontext::bridge()`, or fall back to `export()` plus your own
+     `Rscript`.
+
+This is the same power as `run_r`: it executes arbitrary code in a session
+holding the user's real work. Treat `rm()`, `file.remove()`, `system()` and
+overwriting a loaded object as needing explicit consent, not inference. For
+read-only analysis of a dataset, `export()` plus your own `Rscript` is the
+lighter touch — reserve the bridge for acting on the live session itself.

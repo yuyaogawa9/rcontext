@@ -21,9 +21,15 @@ is a guard against accidents and \emph{not} a security boundary: \code{<<-},
 \code{assign(envir = globalenv())}, \code{file.remove()} and \code{system()}
 all escape it. If that is not acceptable to you, serve a subset of the tools
 instead of the full list.
+
+The opt-in \code{\link{bridge}()} grants the same execution power through a
+file, for sites where no customized MCP server is allowed. It is off unless
+you enable it, asks y/n before each run by default, and evaluates in the
+global environment where you can see and undo what it does, but it is still
+arbitrary code execution in your session.
 }
 \seealso{
 \code{\link{setup}}, \code{\link{start}}, \code{\link{mcp_server}},
-\code{\link{rcontext_tools}}, \code{\link{export}}
+\code{\link{rcontext_tools}}, \code{\link{export}}, \code{\link{bridge}}
 }
 \author{Yuya Ogawa}

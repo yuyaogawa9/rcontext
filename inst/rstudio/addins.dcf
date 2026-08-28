@@ -1,0 +1,4 @@
+Name: Run queued agent command
+Description: Evaluate a pending .rcontext/command.R written by a coding agent (rcontext::tick()). Bind to a keyboard shortcut for a fast, supervised trigger when the MCP server is unavailable.
+Binding: tick
+Interactive: false
